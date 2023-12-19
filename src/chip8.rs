@@ -154,8 +154,7 @@ impl Chip8 {
 
     //7xkk ADD Vx, byte
     fn add_to_value_in_register(&mut self, x: u8, kk: u8) {
-        let kx = self.registers[x as usize];
-        self.registers[x as usize] = kx + kk;
+        self.registers[x as usize] += kk;
     }
 
     //8xy0 LD Vx, Vy
@@ -189,51 +188,44 @@ impl Chip8 {
     fn add_xy(&mut self, x: u8, y: u8) {
         let vx = self.registers[x as usize];
         let vy = self.registers[y as usize];
-
-        let sum: u16 = (vx as u16) + (vy as u16);
-
-         //overflow
-        //special flag set to 1
-        self.set_vf(sum > 255);
-
-        //cast back to u8, if over will take lowest 8bits
-        self.registers[x as usize] = sum as u8;
+        let (sum, carry) = vx.overflowing_add(vy);
+        self.registers[x as usize] = sum;
+        self.set_vf(carry);
     }
 
     //8xy5 SUB Vx, Vy
     fn sub_y_from_x(&mut self, x: u8, y: u8) {
         let vx = self.registers[x as usize];
         let vy = self.registers[y as usize];
-        self.registers[x as usize] = vx.wrapping_sub(vy);
-        //if vx > vy set flag register to 1
-        self.set_vf(vx > vy);
+        let (diff, borrow) = vx.overflowing_sub(vy);
+        self.registers[x as usize] = diff;
+        self.set_vf(borrow);
     }
 
     //8xy6 SHR Vx {, Vy}
     fn shift_right(&mut self, x: u8) {
         let vx = self.registers[x as usize];
-        //get lsb
-        let lsb = vx & 1;
-        self.set_vf(lsb == 1);
+
         self.registers[x as usize] = vx >> 1;
+        //lsb in VF
+        self.registers[0xF] = vx & 1
     }
 
     //8xy7 SUBN Vx, Vy
     fn sub_x_from_y(&mut self, x: u8, y: u8) {
         let vx = self.registers[x as usize];
         let vy = self.registers[y as usize];
-        self.registers[x as usize] = vy.wrapping_sub(vx);
-        //if vy > vx set flag register to 1
-        self.set_vf(vy > vx);
+        let (diff, borrow) = vy.overflowing_sub(vx);
+        self.registers[x as usize] = diff;
+        self.set_vf(borrow);
     }
 
     //8xyE - SHL Vx {, Vy}
     fn shift_left(&mut self, x: u8) {
         let vx = self.registers[x as usize];
-        //shift last bit 7 and mask 1
-        let msb = (vx >> 7) & 1;
-        self.set_vf(msb == 1);
         self.registers[x as usize] = vx << 1;
+        //shift last bit 7 and mask 1 to get msb
+        self.registers[0xF] = vx >> 7 & 1;
     }
 
     //9xy0 - SNE Vx, Vy
@@ -503,7 +495,7 @@ mod tests {
         chip8.registers[1] = 5;
         chip8.sub_y_from_x(0, 1);
         assert_eq!(chip8.registers[0], 5);
-        assert_eq!(chip8.registers[0xF], 1);
+        assert_eq!(chip8.registers[0xF], 0);
     }
 
     #[test]
@@ -513,7 +505,7 @@ mod tests {
         chip8.registers[1] = 10;
         chip8.sub_y_from_x(0, 1);
         assert_eq!(chip8.registers[0], 251); // 5 - 10 = -5, which wraps around to 251 in unsigned 8-bit arithmetic
-        assert_eq!(chip8.registers[0xF], 0);
+        assert_eq!(chip8.registers[0xF], 1);
     }
 
     #[test]
@@ -541,7 +533,7 @@ mod tests {
         chip8.registers[1] = 10;
         chip8.sub_x_from_y(0, 1);
         assert_eq!(chip8.registers[0], 5);
-        assert_eq!(chip8.registers[0xF], 1);
+        assert_eq!(chip8.registers[0xF], 0);
     }
 
     #[test]
@@ -551,7 +543,7 @@ mod tests {
         chip8.registers[1] = 5;
         chip8.sub_x_from_y(0, 1); 
         assert_eq!(chip8.registers[0], 251); // 5 - 10 = -5, which wraps around to 251 in unsigned 8-bit arithmetic
-        assert_eq!(chip8.registers[0xF], 0);
+        assert_eq!(chip8.registers[0xF], 1);
     }
 
     #[test]
