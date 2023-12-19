@@ -80,6 +80,7 @@ impl Chip8 {
             Opcode::SetSoundTimer { x } => self.set_sound_timer(x),
             Opcode::AddVxToIRegister { x } => self.add_vx_to_i_register(x),
             Opcode::LoadVxAsDecimalIntoMemoryAtIRegister { x } => self.load_vx_as_decimal_into_memory_at_i(x),
+            Opcode::LoadRegistersV0ToVxIntoMemoryAtI { x } => self.load_registers_v0_to_vx_into_memory_at_i(x),
             Opcode::UnknownOpcode(op) => todo!("opcode {:04x}", op),
         }
     }
@@ -294,6 +295,18 @@ impl Chip8 {
         self.memory[i] = hundreds;
         self.memory[i + 1] = tens;
         self.memory[i + 2] = ones;
+    }
+
+    //Fx55 LD [I], Vx
+    fn load_registers_v0_to_vx_into_memory_at_i(&mut self, x: u8) {
+        let mut i = self.i_register as usize;
+        for r in 0..=x {
+            let vr = self.registers[r as usize];
+            self.memory[i] = vr;
+            i += 1;
+        }
+        // I is set to I + X + 1
+        self.i_register += x as u16 + 1;
     }
 
     fn set_vf(&mut self, set_to_one: bool) {

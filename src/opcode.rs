@@ -28,6 +28,7 @@ pub enum Opcode {
     SetSoundTimer{ x: u8 },
     AddVxToIRegister{ x: u8 },
     LoadVxAsDecimalIntoMemoryAtIRegister{ x: u8 },
+    LoadRegistersV0ToVxIntoMemoryAtI{ x: u8 },
     UnknownOpcode(u16),
 }
 
@@ -66,7 +67,7 @@ impl Opcode {
             (0xF, x, 0x1, 0x8) => Opcode::SetSoundTimer{ x },
             (0xF, x, 0x1, 0xE) => Opcode::AddVxToIRegister{ x },
             (0xF, x, 0x3, 0x3) => Opcode::LoadVxAsDecimalIntoMemoryAtIRegister{ x },
-            (0x0, 0x0, 0xE, 0xE) => Opcode::Ret,
+            (0xF, x,  0x5, 0x5) => Opcode::LoadRegistersV0ToVxIntoMemoryAtI { x },
             (0x0, _, _, _) => Opcode::Sys(nnn),
             _ => Opcode::UnknownOpcode(opcode),
         }
