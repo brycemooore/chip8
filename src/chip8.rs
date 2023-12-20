@@ -395,6 +395,8 @@ impl Chip8 {
 
 #[cfg(test)]
 mod tests {
+    use std::{sync::{Arc, Mutex}, thread, time::Duration};
+
     use super::*;
 
 
@@ -861,6 +863,45 @@ mod tests {
         chip.wait_for_keypress_store_vx(0);
         //program counter drops back 2 spots to re run the wait opcode
         assert_eq!(0x2FE, chip.position_in_memory);
+    }
+
+    #[test]
+    fn test_wait_for_key_press_and_store_at_vx_threaded() {
+        let mut chip = Chip8::new();
+        //progam to wait for key and store in V0
+        let program = [0xF0, 0x0A];
+        //put program in RAM
+        chip.memory[0x300..0x302].copy_from_slice(&program);
+        //program counter to start of program
+        chip.position_in_memory = 0x300;
+
+        //thread safe for multiple references and interior mutability
+        let chip_arc = Arc::new(Mutex::new(chip));
+        
+        //clone here so chip_arc doesn't move into closure
+        let chip_clone = Arc::clone(&chip_arc);
+        //thread to wait for key press
+        thread::spawn(move || {
+            //get chip reference
+            let mut chip = chip_clone.lock().unwrap();
+            //while we haven't gotten past first opcode, tick
+            while chip.position_in_memory != 0x302 {
+                //fetch and execute opcode
+                //if no key is pressed the program counter will move back 2, 
+                //to retry until there is a key pressed
+                chip.tick();
+            }
+        });
+
+        //press key
+        chip_arc.lock().unwrap().key_press(0xF);
+        //wait for thread to wrap up
+        thread::sleep(Duration::from_millis(500));
+
+        //Only one reference to chip out in the world
+        assert_eq!(1, Arc::strong_count(&chip_arc));
+        //the key is currectly stored in register 0
+        assert_eq!(0xF, chip_arc.lock().unwrap().registers[0]);
     }
 
     #[test]
