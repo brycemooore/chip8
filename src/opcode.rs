@@ -29,7 +29,12 @@ pub enum Opcode {
     AddVxToIRegister{ x: u8 },
     LoadVxAsDecimalIntoMemoryAtIRegister{ x: u8 },
     LoadRegistersV0ToVxIntoMemoryAtI{ x: u8 },
+    FillRegistersV0ToVxFromMmoryAtI{ x: u8 },
+    WaitForKeyPressAndStoreVx { x: u8 },
+    SkipIfKeyAtVxPressed{ x: u8 },
+    SkipIfKeyAtVxNotPressed{ x: u8 },
     UnknownOpcode(u16),
+    //todo two display opcodes
 }
 
 impl Opcode {
@@ -62,12 +67,16 @@ impl Opcode {
             (0xA, _ , _, _) => Opcode::SetIRegister(nnn),
             (0xB, _, _, _) => Opcode::JumpPlusV0(nnn),
             (0xC, x, _ ,_) => Opcode::RandomNumberToRegisterX{ x, kk },
+            (0xE, x, 0x9, 0xE) => Opcode::SkipIfKeyAtVxPressed{ x },
+            (0xE, x, 0xA, 0x1) => Opcode::SkipIfKeyAtVxNotPressed{ x },
             (0xF, x, 0x0, 0x7) => Opcode::LoadDelayTimerToVx{ x },
+            (0xF, x, 0x0, 0xA) => Opcode::WaitForKeyPressAndStoreVx{ x },
             (0xF, x, 0x1, 0x5) => Opcode::SetDelayTimer{ x },
             (0xF, x, 0x1, 0x8) => Opcode::SetSoundTimer{ x },
             (0xF, x, 0x1, 0xE) => Opcode::AddVxToIRegister{ x },
             (0xF, x, 0x3, 0x3) => Opcode::LoadVxAsDecimalIntoMemoryAtIRegister{ x },
-            (0xF, x,  0x5, 0x5) => Opcode::LoadRegistersV0ToVxIntoMemoryAtI { x },
+            (0xF, x,  0x5, 0x5) => Opcode::LoadRegistersV0ToVxIntoMemoryAtI{ x },
+            (0xF, x, 0x6, 0x6) => Opcode::FillRegistersV0ToVxFromMmoryAtI{ x },
             (0x0, 0x0, 0xE, 0xE) => Opcode::Ret,
             (0x0, _, _, _) => Opcode::Sys(nnn),
             _ => Opcode::UnknownOpcode(opcode),

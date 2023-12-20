@@ -1,23 +1,29 @@
 use rand::{thread_rng, Rng};
 use crate::opcode::Opcode;
 
+const NUM_KEYS: usize = 16;
+const NUM_REGISTERS: usize = 16;
+const RAM: usize = 0x1000;
+const STACK_SIZE: usize = 16;
+
 pub struct Chip8 {
     //16 registers
-    pub registers: [u8; 16],
+    pub registers: [u8; NUM_REGISTERS],
     //use usize for easy indexing
     //program counter
     pub position_in_memory: usize,
     //4096 bytes = 4 kb
-    pub memory: [u8; 0x1000],
+    pub memory: [u8; RAM],
     //stack is 16 levels deep
     //after 16 nested function calls
     //program encounters stack overflow
-    pub stack: [u16; 16],
+    pub stack: [u16; STACK_SIZE],
     //use usize for easy indexing
     pub stack_pointer: usize,
     pub i_register: u16,
     pub delay_timer_register: u8,
     pub sound_timer_register: u8,
+    pub keys: [bool; NUM_KEYS],
 }
 
 impl Chip8 {
@@ -25,15 +31,17 @@ impl Chip8 {
     pub fn new() -> Self {
         Chip8 {
             position_in_memory: 0,
-            registers: [0; 16],
-            memory: [0; 4096],
-            stack: [0; 16],
+            registers: [0; NUM_REGISTERS],
+            memory: [0; RAM],
+            stack: [0; STACK_SIZE],
             stack_pointer: 0,
             i_register: 0,
             delay_timer_register: 0,
             sound_timer_register: 0,
+            keys: [false; NUM_KEYS],
         }
     }
+
     fn fetch(&mut self) -> u16 {
         let p = self.position_in_memory;
         //byte at p
@@ -49,6 +57,16 @@ impl Chip8 {
     pub fn tick(&mut self) {
         let opcode = self.fetch();
         self.execute(opcode);
+    }
+
+    pub fn tick_timers(&mut self) {
+        if self.delay_timer_register > 0 {
+            self.delay_timer_register -= 1;
+        }
+
+        if self.sound_timer_register > 0 {
+            self.sound_timer_register -= 1;
+        }
     }
 
     pub fn execute(&mut self, opcode: u16) {
@@ -81,8 +99,31 @@ impl Chip8 {
             Opcode::AddVxToIRegister { x } => self.add_vx_to_i_register(x),
             Opcode::LoadVxAsDecimalIntoMemoryAtIRegister { x } => self.load_vx_as_decimal_into_memory_at_i(x),
             Opcode::LoadRegistersV0ToVxIntoMemoryAtI { x } => self.load_registers_v0_to_vx_into_memory_at_i(x),
+            Opcode::FillRegistersV0ToVxFromMmoryAtI { x } => self.fill_registers_v0_to_vx_from_memory_at_i(x),
+            Opcode::WaitForKeyPressAndStoreVx { x } => self.wait_for_keypress_store_vx(x),
+            Opcode::SkipIfKeyAtVxPressed { x } => self.skip_if_key_at_vx_pressed(x),
+            Opcode::SkipIfKeyAtVxNotPressed { x } => self.skip_if_key_at_vx_not_pressed(x),
             Opcode::UnknownOpcode(op) => todo!("opcode {:04x}", op),
         }
+    }
+
+    pub fn key_press(&mut self, key: u8) {
+        //runtime check here, responsibilty falls on keyboard provider
+        //should never happen
+        if key > 15 {
+            panic!("Invalid Key Provided, key must be hexadecmal value of 0x0 through 0xF");
+        }
+
+        self.keys[key as usize] = true;
+    }
+
+    pub fn key_release(&mut self, key: u8) {
+        //runtime check here, responsibilty falls on keyboard provider
+        //should never happen
+        if key > 15 {
+            panic!("Invalid Key Provided, key must be hexadecmal value of 0x0 through 0xF");
+        }
+        self.keys[key as usize] = false;
     }
 
     //2nnn - CALL addr
@@ -301,6 +342,48 @@ impl Chip8 {
         self.i_register += x as u16 + 1;
     }
 
+    //Fx65 LD Vx, [I]
+    fn fill_registers_v0_to_vx_from_memory_at_i(&mut self, x: u8) {
+        for r in 0..=x {
+            self.registers[r as usize] = self.memory[(self.i_register + r as u16) as usize]; 
+        }
+        self.i_register += x as u16 + 1;
+    }
+
+    //Fx0A LD Vx, K
+    fn wait_for_keypress_store_vx(&mut self, x: u8) {
+        let mut pressed = false;
+        //loop through keys, if any true, a key is pressed
+        for (i, key) in self.keys.iter().enumerate() {
+            if *key {
+                //set register to i
+                self.registers[x as usize] = i as u8;
+                pressed = true;
+            }
+        }
+
+        //redo opcode
+        if !pressed {
+            self.position_in_memory -= 2;
+        }
+    }
+
+    //Ex9E SKP Vx
+    fn skip_if_key_at_vx_pressed(&mut self, x: u8) {
+        let vx = self.registers[x as usize];
+        if self.keys[vx as usize] {
+            self.position_in_memory += 2;
+        }
+    }
+
+    //ExA1 SKP Vx
+    fn skip_if_key_at_vx_not_pressed(&mut self, x: u8) {
+        let vx = self.registers[x as usize];
+        if !(self.keys[vx as usize]) {
+            self.position_in_memory += 2;
+        }
+    }
+
     fn set_vf(&mut self, set_to_one: bool) {
         if set_to_one {
             self.registers[0xF] = 1;
@@ -313,6 +396,38 @@ impl Chip8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    #[test]
+    fn test_tick() {
+        let mut chip = Chip8::new();
+        
+        //test load jump command and execute.
+        //jump to 400
+        chip.memory[0x300] = 0x14;
+        chip.memory[0x301] = 0x00;
+        chip.position_in_memory = 0x300;
+        chip.tick();
+        assert_eq!(0x400, chip.position_in_memory);
+    }
+
+    #[test]
+    fn test_tick_timers() {
+        let mut chip = Chip8::new();
+
+        chip.delay_timer_register = 2;
+        chip.sound_timer_register = 1;
+
+        chip.tick_timers();
+
+        assert_eq!(1, chip.delay_timer_register);
+        assert_eq!(0, chip.sound_timer_register);
+
+        chip.tick_timers();
+
+        assert_eq!(0, chip.delay_timer_register);
+        assert_eq!(0, chip.sound_timer_register);
+    }
 
     #[test]
     fn test_fetch() {
@@ -649,5 +764,148 @@ mod tests {
         assert_eq!(0, chip3.memory[0x301]);
         assert_eq!(2, chip3.memory[0x302]);
         
+    }
+
+    #[test]
+    fn test_load_v0_to_vx_into_memory_at_i_all_registers() {
+        let mut chip = Chip8::new();
+        chip.i_register = 0x300;
+        for (i, register) in chip.registers.iter_mut().enumerate() {
+            *register = i as u8;
+        }
+
+        chip.load_registers_v0_to_vx_into_memory_at_i(0xF);
+
+        let mut memory_counter = 0x300;
+        //test all 15 registers
+        for i in 0x0..=0xF {
+            assert_eq!(i, chip.memory[memory_counter]);
+            memory_counter += 1;
+        }
+
+        //make sure i is squared away
+        assert_eq!(0x310, chip.i_register);
+    }
+
+    #[test]
+    fn test_load_v0_to_vx_into_memory_at_i_some_registers() {
+        let mut chip = Chip8::new();
+        chip.i_register = 0x300;
+        chip.registers[0] = 1;
+        chip.registers[1] = 2;
+        chip.registers[2] = 0;
+        chip.registers[3] = 4;
+
+        chip.load_registers_v0_to_vx_into_memory_at_i(0x3);
+
+        assert_eq!(1, chip.memory[0x300]);
+        assert_eq!(2, chip.memory[0x301]);
+        assert_eq!(0, chip.memory[0x302]);
+        assert_eq!(4, chip.memory[0x303]);
+        assert_eq!(0, chip.memory[0x304]); 
+
+        //make sure i is squared away
+        assert_eq!(0x304, chip.i_register);
+    }
+
+    #[test]
+    fn test_fill_registers_v0_to_vx_from_memory_at_i_all_registers() {
+        let mut chip = Chip8::new();
+        chip.i_register = 0x300;
+
+        for i in 0x0..=0xF {
+            chip.memory[0x300 + i] = i as u8 + 1;
+        }
+
+        chip.fill_registers_v0_to_vx_from_memory_at_i(0xF);
+
+        for i in 0x0..=0xF {
+            assert_eq!(i as u8 + 1, chip.registers[i]);
+        }
+
+        assert_eq!(0x310, chip.i_register);
+    }
+
+    #[test]
+    fn test_fill_registers_v0_to_vx_from_memory_at_i_some_registers() {
+        let mut chip = Chip8::new();
+        chip.i_register = 0x300;
+
+        chip.memory[0x300] = 12;
+        chip.memory[0x301] = 6;
+        chip.memory[0x302] = 1;
+
+        chip.fill_registers_v0_to_vx_from_memory_at_i(0x2);
+
+        assert_eq!(12, chip.registers[0]);
+        assert_eq!(6, chip.registers[1]);
+        assert_eq!(1, chip.registers[2]);
+        assert_eq!(0, chip.registers[3]);
+
+        assert_eq!(0x303, chip.i_register);
+    }
+
+    #[test]
+    fn test_wait_for_key_press_and_store_at_vx() {
+        let mut chip = Chip8::new();
+        chip.position_in_memory = 0x300;
+        //press key
+        chip.key_press(0xF);
+        //wait for keypress
+        chip.wait_for_keypress_store_vx(0);
+        assert_eq!(0xF, chip.registers[0]);
+        //release key
+        chip.key_release(0xF);
+
+        //check again no key is pressed
+        chip.wait_for_keypress_store_vx(0);
+        //program counter drops back 2 spots to re run the wait opcode
+        assert_eq!(0x2FE, chip.position_in_memory);
+    }
+
+    #[test]
+    fn test_skip_if_key_pressed_at_vx() {
+        let mut chip = Chip8::new();
+
+        chip.registers[0] = 0xF;
+        chip.position_in_memory = 0x300;
+
+        //press key in V0
+        chip.key_press(0xF);
+        //run skip operation
+        chip.skip_if_key_at_vx_pressed(0);
+        //program counter move two places
+        assert_eq!(0x302, chip.position_in_memory);
+        chip.key_release(0xF);
+
+        //press wrong key
+        chip.key_press(0xA);
+        //run skip
+        chip.skip_if_key_at_vx_pressed(0);
+        //should not have moved
+        assert_eq!(0x302, chip.position_in_memory);
+    }
+
+    #[test]
+    fn test_skip_if_key_not_pressed_at_vx() {
+        let mut chip = Chip8::new();
+
+        chip.registers[0] = 0xF;
+        chip.position_in_memory = 0x300;
+
+        //press key in V0
+        chip.key_press(0xF);
+        //run skip operation
+        chip.skip_if_key_at_vx_not_pressed(0);
+        //should not skip
+        assert_eq!(0x300, chip.position_in_memory);
+        chip.key_release(0xF);
+
+        //press wrong key
+        chip.key_press(0xA);
+        //run skip
+        chip.skip_if_key_at_vx_not_pressed(0);
+        //should skip
+        assert_eq!(0x302, chip.position_in_memory);
     }
 }
