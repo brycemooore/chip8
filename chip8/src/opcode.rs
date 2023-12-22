@@ -124,4 +124,3 @@ mod tests {
         assert_eq!(Opcode::decode(opcode), Opcode::UnknownOpcode(opcode));
     }
 }
-
