@@ -75,16 +75,14 @@ impl Chip8 {
         chip
     }
 
-    fn fetch(&mut self) -> u16 {
-        let p = self.position_in_memory;
-        //byte at p
-        let op_byte1 = self.memory[p] as u16;
-        //byte at p + 1
-        let op_byte2 = self.memory[p + 1] as u16;
-        //shift position in memory by 2 bytes
-        self.position_in_memory += 2;
-        //combine into a single 16 bit opcode
-        op_byte1 << 8 | op_byte2
+    pub fn new_with_rom(rom: &[u8]) -> Self {
+        let mut chip = Chip8::new();
+        chip.load_rom(rom);
+        chip
+    }
+
+    pub fn load_rom(&mut self, rom: &[u8]) {
+        self.memory[START_ADDR..=START_ADDR + rom.len() - 1].copy_from_slice(rom);
     }
 
     pub fn tick(&mut self) {
@@ -102,7 +100,38 @@ impl Chip8 {
         }
     }
 
-    pub fn execute(&mut self, opcode: u16) {
+    pub fn key_press(&mut self, key: u8) {
+        //runtime check here, responsibilty falls on keyboard provider
+        //should never happen
+        if key > 15 {
+            panic!("Invalid Key Provided, key must be hexadecmal value of 0x0 through 0xF");
+        }
+
+        self.keys[key as usize] = true;
+    }
+
+    pub fn key_release(&mut self, key: u8) {
+        //runtime check here, responsibilty falls on keyboard provider
+        //should never happen
+        if key > 15 {
+            panic!("Invalid Key Provided, key must be hexadecmal value of 0x0 through 0xF");
+        }
+        self.keys[key as usize] = false;
+    }
+
+    fn fetch(&mut self) -> u16 {
+        let p = self.position_in_memory;
+        //byte at p
+        let op_byte1 = self.memory[p] as u16;
+        //byte at p + 1
+        let op_byte2 = self.memory[p + 1] as u16;
+        //shift position in memory by 2 bytes
+        self.position_in_memory += 2;
+        //combine into a single 16 bit opcode
+        op_byte1 << 8 | op_byte2
+    }
+
+    fn execute(&mut self, opcode: u16) {
         match Opcode::decode(opcode) {
             Opcode::Sys(_) => panic!("Syscall not supported"),
             Opcode::Jump(nnn) => self.jump(nnn),
@@ -141,25 +170,6 @@ impl Chip8 {
             Opcode::SetICorrespondingFontAddressFromVx { x } => self.set_font_address_for_value_in_vx(x),
             Opcode::UnknownOpcode(op) => todo!("opcode {:04x}", op),
         }
-    }
-
-    pub fn key_press(&mut self, key: u8) {
-        //runtime check here, responsibilty falls on keyboard provider
-        //should never happen
-        if key > 15 {
-            panic!("Invalid Key Provided, key must be hexadecmal value of 0x0 through 0xF");
-        }
-
-        self.keys[key as usize] = true;
-    }
-
-    pub fn key_release(&mut self, key: u8) {
-        //runtime check here, responsibilty falls on keyboard provider
-        //should never happen
-        if key > 15 {
-            panic!("Invalid Key Provided, key must be hexadecmal value of 0x0 through 0xF");
-        }
-        self.keys[key as usize] = false;
     }
 
     //2nnn - CALL addr
