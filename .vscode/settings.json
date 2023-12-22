@@ -1,6 +1,5 @@
 {
     "rust-analyzer.linkedProjects": [
-        "./chip8/Cargo.toml",
         "./chip8/Cargo.toml"
     ]
 }
