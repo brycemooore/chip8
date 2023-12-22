@@ -5,7 +5,33 @@ const NUM_KEYS: usize = 16;
 const NUM_REGISTERS: usize = 16;
 const RAM: usize = 0x1000;
 const STACK_SIZE: usize = 16;
+const DISPLAY_MAX_Y: usize = 32;
+const DISPLAY_MAX_X :usize = 64;
+const FONTSET_SIZE: usize = 80;
+const START_ADDR: usize = 0x200;
+const SPRITE_WIDTH: usize = 8;
+const FONTSET_ADDR: usize = 0x50;
 
+const FONTSET: [u8; FONTSET_SIZE] = [
+    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+    0x20, 0x60, 0x20, 0x20, 0x70, // 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+    0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+];
+
+#[derive(Debug)]
 pub struct Chip8 {
     //16 registers
     pub registers: [u8; NUM_REGISTERS],
@@ -24,12 +50,13 @@ pub struct Chip8 {
     pub delay_timer_register: u8,
     pub sound_timer_register: u8,
     pub keys: [bool; NUM_KEYS],
+    pub display: [bool; DISPLAY_MAX_X * DISPLAY_MAX_Y]
 }
 
 impl Chip8 {
 
     pub fn new() -> Self {
-        Chip8 {
+        let mut chip = Chip8 {
             position_in_memory: 0,
             registers: [0; NUM_REGISTERS],
             memory: [0; RAM],
@@ -39,7 +66,13 @@ impl Chip8 {
             delay_timer_register: 0,
             sound_timer_register: 0,
             keys: [false; NUM_KEYS],
-        }
+            display: [false; DISPLAY_MAX_X * DISPLAY_MAX_Y]
+        };
+        //load fontset
+        chip.memory[FONTSET_ADDR..=FONTSET_ADDR + FONTSET_SIZE - 1].copy_from_slice(&FONTSET);
+        //start addr
+        chip.position_in_memory = START_ADDR;
+        chip
     }
 
     fn fetch(&mut self) -> u16 {
@@ -103,6 +136,9 @@ impl Chip8 {
             Opcode::WaitForKeyPressAndStoreVx { x } => self.wait_for_keypress_store_vx(x),
             Opcode::SkipIfKeyAtVxPressed { x } => self.skip_if_key_at_vx_pressed(x),
             Opcode::SkipIfKeyAtVxNotPressed { x } => self.skip_if_key_at_vx_not_pressed(x),
+            Opcode::Draw { x, y, n } => self.draw(x, y, n),
+            Opcode::ClearScreen => self.clear_screen(),
+            Opcode::SetICorrespondingFontAddressFromVx { x } => self.set_font_address_for_value_in_vx(x),
             Opcode::UnknownOpcode(op) => todo!("opcode {:04x}", op),
         }
     }
@@ -384,6 +420,62 @@ impl Chip8 {
         }
     }
 
+    fn draw(&mut self, x: u8, y: u8, n: u8) {
+        let x_coord = self.registers[x as usize];
+        let y_coord = self.registers[y as usize];
+        let mut flipped = false;
+        //n is num bytes at i for sprite
+        //Each byte represents one line of the sprite top down
+        //loop through each of the bytes at I gives us our y axis
+        for y_line in 0..n {
+            let addr = self.i_register + y_line as u16;
+            let pixels = self.memory[addr as usize];
+
+            //each bit in the byte represent the 8 bits that make up x axis
+            //sprites are always 8
+            for x_line in 0..SPRITE_WIDTH {
+                //this shifts through each bit, and checks if it needs to flip
+                //only flips when it is 1
+                if pixels & (0b10000000 >> x_line) != 0 {
+                    // Sprites should wrap around screen, so apply modulo
+                    let x = (x_coord + x_line as u8) as usize % DISPLAY_MAX_X;
+                    let y = (y_coord + y_line) as usize % DISPLAY_MAX_Y;
+
+                     // Get our pixel's index in the 1D screen array
+                     //index = y * width + x
+                     let idx = y * DISPLAY_MAX_X + x;
+                     // If a pixel on the screen is set to 01, 
+                     //and the sprite to be drawn contains a 01 for this same pixel, 
+                     //the screen pixel is turned off and VF is set to 01. 
+                     //If the sprite is simply drawn on the screen without drawing over any pixels set to 01,
+                     //VF is set to 00
+                     //boolean |= will only stay false if all of the display spots are false
+                     flipped |= self.display[idx]; 
+                     //xor with true, since we only do this when the sprite wants a pixel drawn
+                     self.display[idx] ^= true;
+                }
+            }
+        }
+
+        // Populate VF register
+        if flipped {
+            self.registers[0xF] = 1;
+        } else {
+            self.registers[0xF] = 0;
+        }
+    }
+
+    //00E0
+    fn clear_screen(&mut self) {
+        self.display = [false; DISPLAY_MAX_X * DISPLAY_MAX_Y];
+    }
+
+    //Fx29
+    fn set_font_address_for_value_in_vx(&mut self, x: u8) {
+        let vx = self.registers[x as usize];
+        self.i_register = FONTSET_ADDR as u16 + vx as u16 * 5;
+    }
+
     fn set_vf(&mut self, set_to_one: bool) {
         if set_to_one {
             self.registers[0xF] = 1;
@@ -434,10 +526,10 @@ mod tests {
     #[test]
     fn test_fetch() {
         let mut chip8 = Chip8::new();
-        chip8.memory[0] = 0x12;
-        chip8.memory[1] = 0x34;
+        chip8.memory[START_ADDR] = 0x12;
+        chip8.memory[START_ADDR + 1] = 0x34;
         assert_eq!(chip8.fetch(), 0x1234);
-        assert_eq!(chip8.position_in_memory, 2);
+        assert_eq!(chip8.position_in_memory, START_ADDR + 2);
     }
 
     #[test]
@@ -499,7 +591,7 @@ mod tests {
         //don't call tick, call method manually
         chip8.skip_if_equal_at_x(0, 0x12);
         //position in memory should be incremented by 2
-        assert_eq!(chip8.position_in_memory, 2);
+        assert_eq!(chip8.position_in_memory, START_ADDR + 2);
     }
 
     #[test]
@@ -510,7 +602,7 @@ mod tests {
         //don't call tick, call method manually
         chip8.skip_if_not_equal_at_x(0, 0x13);
         //position in memory should be incremented by 2
-        assert_eq!(chip8.position_in_memory, 2);
+        assert_eq!(chip8.position_in_memory, START_ADDR + 2);
     }
 
     #[test]
@@ -522,7 +614,7 @@ mod tests {
         //don't call tick, call method manually
         chip8.skip_if_both_values_are_equal(0, 1);
         //position in memory should be incremented by 2
-        assert_eq!(chip8.position_in_memory, 2);
+        assert_eq!(chip8.position_in_memory, START_ADDR + 2);
     }
 
     #[test]
@@ -690,7 +782,7 @@ mod tests {
         //don't call tick, call method manually
         chip8.skip_if_both_values_are_not_equal(0, 1);
         //position in memory should be incremented by 2
-        assert_eq!(chip8.position_in_memory, 2);
+        assert_eq!(chip8.position_in_memory, START_ADDR + 2);
     }
 
     #[test]
@@ -885,7 +977,7 @@ mod tests {
             //get chip reference
             let mut chip = chip_clone.lock().unwrap();
             //while we haven't gotten past first opcode, tick
-            while chip.position_in_memory != 0x302 {
+            while chip.position_in_memory < 0x302 {
                 //fetch and execute opcode
                 //if no key is pressed the program counter will move back 2, 
                 //to retry until there is a key pressed
@@ -948,5 +1040,62 @@ mod tests {
         chip.skip_if_key_at_vx_not_pressed(0);
         //should skip
         assert_eq!(0x302, chip.position_in_memory);
+    }
+
+    #[test]
+    fn test_clear_screen() {
+        let mut chip = Chip8::new();
+
+        //font start
+        chip.i_register = FONTSET_ADDR as u16;
+
+        //draw first letter in font set 5 bytes at
+        chip.draw(0, 0, 5);
+
+        assert!(chip.display.contains(&true));
+
+        chip.clear_screen();
+
+        assert!(!(chip.display.contains(&true)));
+    }
+
+    #[test]
+    fn test_set_font_address_for_value_in_vx() {
+        let mut chip = Chip8::new();
+
+        let mut count = 0;
+        for hex in 0x0..=0xF {
+            chip.registers[0] = hex;
+
+            chip.set_font_address_for_value_in_vx(0);
+    
+            assert_eq!(FONTSET_ADDR as u16 + 5 * count, chip.i_register);
+            count += 1;
+        }
+
+    }
+
+    #[test]
+    fn test_draw() {
+        let mut chip = Chip8::new();
+
+        //font start
+        chip.i_register = 5 * 0xF +  FONTSET_ADDR as u16;
+
+        //draw first letter in font set 5 bytes at
+        chip.draw(0, 0, 5);
+
+        for y in 0..5 {
+            for x in 0..8 {
+                let index = y * DISPLAY_MAX_X + x;
+                if chip.display[index] {
+                    print!("*");
+                } else {
+                    print!(" ");
+                }
+            }
+            print!("\n");
+        }
+
     }
 }
