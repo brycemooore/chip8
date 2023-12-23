@@ -81,7 +81,7 @@ impl Opcode {
             (0xF, x, 0x2, 0x9) => Opcode::SetICorrespondingFontAddressFromVx{ x },
             (0xF, x, 0x3, 0x3) => Opcode::LoadVxAsDecimalIntoMemoryAtIRegister{ x },
             (0xF, x,  0x5, 0x5) => Opcode::LoadRegistersV0ToVxIntoMemoryAtI{ x },
-            (0xF, x, 0x6, 0x6) => Opcode::FillRegistersV0ToVxFromMmoryAtI{ x },
+            (0xF, x, 0x6, 0x5) => Opcode::FillRegistersV0ToVxFromMmoryAtI{ x },
             (0x0, 0x0, 0xE, 0x0) => Opcode::ClearScreen,
             (0x0, 0x0, 0xE, 0xE) => Opcode::Ret,
             (0x0, _, _, _) => Opcode::Sys(nnn),

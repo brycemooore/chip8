@@ -245,7 +245,8 @@ impl Chip8 {
 
     //7xkk ADD Vx, byte
     fn add_to_value_in_register(&mut self, x: u8, kk: u8) {
-        self.registers[x as usize] += kk;
+        let vx = self.registers[x as usize];
+        self.registers[x as usize] = vx.wrapping_add(kk);
     }
 
     //8xy0 LD Vx, Vy
@@ -290,7 +291,7 @@ impl Chip8 {
         let vy = self.registers[y as usize];
         let (diff, borrow) = vx.overflowing_sub(vy);
         self.registers[x as usize] = diff;
-        self.set_vf(borrow);
+        self.set_vf(!borrow);
     }
 
     //8xy6 SHR Vx {, Vy}
@@ -308,7 +309,7 @@ impl Chip8 {
         let vy = self.registers[y as usize];
         let (diff, borrow) = vy.overflowing_sub(vx);
         self.registers[x as usize] = diff;
-        self.set_vf(borrow);
+        self.set_vf(!borrow);
     }
 
     //8xyE - SHL Vx {, Vy}
@@ -365,7 +366,7 @@ impl Chip8 {
     //Fx1E ADD I, Vx
     fn add_vx_to_i_register(&mut self, x: u8) {
         let vx = self.registers[x as usize];
-        self.i_register += vx as u16;
+        self.i_register  = self.i_register.wrapping_add(vx as u16);
     }
 
     //Fx33 LD B, Vx
