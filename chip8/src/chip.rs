@@ -5,8 +5,8 @@ const NUM_KEYS: usize = 16;
 const NUM_REGISTERS: usize = 16;
 const RAM: usize = 0x1000;
 const STACK_SIZE: usize = 16;
-const DISPLAY_MAX_Y: usize = 32;
-const DISPLAY_MAX_X :usize = 64;
+pub const DISPLAY_MAX_Y: usize = 32;
+pub const DISPLAY_MAX_X :usize = 64;
 const FONTSET_SIZE: usize = 80;
 const START_ADDR: usize = 0x200;
 const SPRITE_WIDTH: usize = 8;
@@ -34,23 +34,23 @@ const FONTSET: [u8; FONTSET_SIZE] = [
 #[derive(Debug)]
 pub struct Chip8 {
     //16 registers
-    pub registers: [u8; NUM_REGISTERS],
+    registers: [u8; NUM_REGISTERS],
     //use usize for easy indexing
     //program counter
-    pub position_in_memory: usize,
+    position_in_memory: usize,
     //4096 bytes = 4 kb
-    pub memory: [u8; RAM],
+    memory: [u8; RAM],
     //stack is 16 levels deep
     //after 16 nested function calls
     //program encounters stack overflow
-    pub stack: [u16; STACK_SIZE],
+    stack: [u16; STACK_SIZE],
     //use usize for easy indexing
-    pub stack_pointer: usize,
-    pub i_register: u16,
-    pub delay_timer_register: u8,
-    pub sound_timer_register: u8,
-    pub keys: [bool; NUM_KEYS],
-    pub display: [bool; DISPLAY_MAX_X * DISPLAY_MAX_Y]
+    stack_pointer: usize,
+    i_register: u16,
+    delay_timer_register: u8,
+    sound_timer_register: u8,
+    keys: [bool; NUM_KEYS],
+    display: [bool; DISPLAY_MAX_X * DISPLAY_MAX_Y]
 }
 
 impl Chip8 {
@@ -79,6 +79,10 @@ impl Chip8 {
         let mut chip = Chip8::new();
         chip.load_rom(rom);
         chip
+    }
+
+    pub fn get_display(&self) -> &[bool; DISPLAY_MAX_X * DISPLAY_MAX_Y] {
+        &self.display
     }
 
     pub fn load_rom(&mut self, rom: &[u8]) {
