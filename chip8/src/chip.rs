@@ -1,12 +1,12 @@
-use rand::{thread_rng, Rng};
 use crate::opcode::Opcode;
+use rand::{thread_rng, Rng};
 
 const NUM_KEYS: usize = 16;
 const NUM_REGISTERS: usize = 16;
 const RAM: usize = 0x1000;
 const STACK_SIZE: usize = 16;
 pub const DISPLAY_MAX_Y: usize = 32;
-pub const DISPLAY_MAX_X :usize = 64;
+pub const DISPLAY_MAX_X: usize = 64;
 const FONTSET_SIZE: usize = 80;
 const START_ADDR: usize = 0x200;
 const SPRITE_WIDTH: usize = 8;
@@ -28,7 +28,7 @@ const FONTSET: [u8; FONTSET_SIZE] = [
     0xF0, 0x80, 0x80, 0x80, 0xF0, // C
     0xE0, 0x90, 0x90, 0x90, 0xE0, // D
     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-    0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
 #[derive(Debug)]
@@ -50,11 +50,10 @@ pub struct Chip8 {
     delay_timer_register: u8,
     sound_timer_register: u8,
     keys: [bool; NUM_KEYS],
-    display: [bool; DISPLAY_MAX_X * DISPLAY_MAX_Y]
+    display: [bool; DISPLAY_MAX_X * DISPLAY_MAX_Y],
 }
 
 impl Chip8 {
-
     pub fn new() -> Self {
         let mut chip = Chip8 {
             position_in_memory: 0,
@@ -66,7 +65,7 @@ impl Chip8 {
             delay_timer_register: 0,
             sound_timer_register: 0,
             keys: [false; NUM_KEYS],
-            display: [false; DISPLAY_MAX_X * DISPLAY_MAX_Y]
+            display: [false; DISPLAY_MAX_X * DISPLAY_MAX_Y],
         };
         //load fontset
         chip.memory[FONTSET_ADDR..=FONTSET_ADDR + FONTSET_SIZE - 1].copy_from_slice(&FONTSET);
@@ -146,7 +145,9 @@ impl Chip8 {
             Opcode::LoadValueToRegister { x, kk } => self.load_value_to_register(x, kk),
             Opcode::AddToValueInRegister { x, kk } => self.add_to_value_in_register(x, kk),
             Opcode::SkipIfBothValuesEqual { x, y } => self.skip_if_both_values_are_equal(x, y),
-            Opcode::SkipIfBothValuesNotEqual { x, y } => self.skip_if_both_values_are_not_equal(x, y),
+            Opcode::SkipIfBothValuesNotEqual { x, y } => {
+                self.skip_if_both_values_are_not_equal(x, y)
+            }
             Opcode::LoadYIntoX { x, y } => self.load_y_into_x(x, y),
             Opcode::BitwiseOrXY { x, y } => self.bitwise_or_xy(x, y),
             Opcode::BitwiseAndXY { x, y } => self.bitwise_and_xy(x, y),
@@ -155,23 +156,31 @@ impl Chip8 {
             Opcode::SubYfromX { x, y } => self.sub_y_from_x(x, y),
             Opcode::SubXfromY { x, y } => self.sub_x_from_y(x, y),
             Opcode::Ret => self.ret(),
-            Opcode::ShiftRight { x } => self.shift_right(x),
-            Opcode::ShiftLeft { x } => self.shift_left(x),
+            Opcode::ShiftRight { x, y } => self.shift_right(x, y),
+            Opcode::ShiftLeft { x, y } => self.shift_left(x, y),
             Opcode::SetIRegister(nnn) => self.set_i_register(nnn),
             Opcode::RandomNumberToRegisterX { x, kk } => self.random_number_to_x(x, kk),
             Opcode::LoadDelayTimerToVx { x } => self.load_delay_timer_to_vx(x),
             Opcode::SetDelayTimer { x } => self.set_delay_timer(x),
             Opcode::SetSoundTimer { x } => self.set_sound_timer(x),
             Opcode::AddVxToIRegister { x } => self.add_vx_to_i_register(x),
-            Opcode::LoadVxAsDecimalIntoMemoryAtIRegister { x } => self.load_vx_as_decimal_into_memory_at_i(x),
-            Opcode::LoadRegistersV0ToVxIntoMemoryAtI { x } => self.load_registers_v0_to_vx_into_memory_at_i(x),
-            Opcode::FillRegistersV0ToVxFromMmoryAtI { x } => self.fill_registers_v0_to_vx_from_memory_at_i(x),
+            Opcode::LoadVxAsDecimalIntoMemoryAtIRegister { x } => {
+                self.load_vx_as_decimal_into_memory_at_i(x)
+            }
+            Opcode::LoadRegistersV0ToVxIntoMemoryAtI { x } => {
+                self.load_registers_v0_to_vx_into_memory_at_i(x)
+            }
+            Opcode::FillRegistersV0ToVxFromMmoryAtI { x } => {
+                self.fill_registers_v0_to_vx_from_memory_at_i(x)
+            }
             Opcode::WaitForKeyPressAndStoreVx { x } => self.wait_for_keypress_store_vx(x),
             Opcode::SkipIfKeyAtVxPressed { x } => self.skip_if_key_at_vx_pressed(x),
             Opcode::SkipIfKeyAtVxNotPressed { x } => self.skip_if_key_at_vx_not_pressed(x),
             Opcode::Draw { x, y, n } => self.draw(x, y, n),
             Opcode::ClearScreen => self.clear_screen(),
-            Opcode::SetICorrespondingFontAddressFromVx { x } => self.set_font_address_for_value_in_vx(x),
+            Opcode::SetICorrespondingFontAddressFromVx { x } => {
+                self.set_font_address_for_value_in_vx(x)
+            }
             Opcode::UnknownOpcode(op) => todo!("opcode {:04x}", op),
         }
     }
@@ -195,7 +204,6 @@ impl Chip8 {
 
     //00EE - RET
     fn ret(&mut self) {
-
         if self.stack_pointer == 0 {
             panic!("Stack underflow");
         }
@@ -289,35 +297,33 @@ impl Chip8 {
     fn sub_y_from_x(&mut self, x: u8, y: u8) {
         let vx = self.registers[x as usize];
         let vy = self.registers[y as usize];
-        let (diff, borrow) = vx.overflowing_sub(vy);
-        self.registers[x as usize] = diff;
-        self.set_vf(!borrow);
-    }
-
-    //8xy6 SHR Vx {, Vy}
-    fn shift_right(&mut self, x: u8) {
-        let vx = self.registers[x as usize];
-
-        self.registers[x as usize] = vx >> 1;
-        //lsb in VF
-        self.registers[0xF] = vx & 1
+        self.registers[x as usize] = vx.wrapping_sub(vy);
+        self.set_vf(vx > vy);
     }
 
     //8xy7 SUBN Vx, Vy
     fn sub_x_from_y(&mut self, x: u8, y: u8) {
         let vx = self.registers[x as usize];
         let vy = self.registers[y as usize];
-        let (diff, borrow) = vy.overflowing_sub(vx);
-        self.registers[x as usize] = diff;
-        self.set_vf(!borrow);
+        self.registers[x as usize] = vy.wrapping_sub(vx);
+        self.set_vf(vy > vx);
+    }
+
+    //8xy6 SHR Vx {, Vy}
+    fn shift_right(&mut self, x: u8, y: u8) {
+        let vy = self.registers[y as usize];
+
+        self.registers[x as usize] = vy >> 1;
+        //lsb in VF
+        self.registers[0xF] = vy & 1
     }
 
     //8xyE - SHL Vx {, Vy}
-    fn shift_left(&mut self, x: u8) {
-        let vx = self.registers[x as usize];
-        self.registers[x as usize] = vx << 1;
+    fn shift_left(&mut self, x: u8, y: u8) {
+        let vy = self.registers[y as usize];
+        self.registers[x as usize] = vy << 1;
         //shift last bit 7 and mask 1 to get msb
-        self.registers[0xF] = vx >> 7 & 1;
+        self.registers[0xF] = vy >> 7 & 1;
     }
 
     //9xy0 - SNE Vx, Vy
@@ -366,7 +372,7 @@ impl Chip8 {
     //Fx1E ADD I, Vx
     fn add_vx_to_i_register(&mut self, x: u8) {
         let vx = self.registers[x as usize];
-        self.i_register  = self.i_register.wrapping_add(vx as u16);
+        self.i_register = self.i_register.wrapping_add(vx as u16);
     }
 
     //Fx33 LD B, Vx
@@ -396,7 +402,7 @@ impl Chip8 {
     //Fx65 LD Vx, [I]
     fn fill_registers_v0_to_vx_from_memory_at_i(&mut self, x: u8) {
         for r in 0..=x {
-            self.registers[r as usize] = self.memory[(self.i_register + r as u16) as usize]; 
+            self.registers[r as usize] = self.memory[(self.i_register + r as u16) as usize];
         }
         self.i_register += x as u16 + 1;
     }
@@ -456,18 +462,18 @@ impl Chip8 {
                     let x = (x_coord + x_line as u8) as usize % DISPLAY_MAX_X;
                     let y = (y_coord + y_line) as usize % DISPLAY_MAX_Y;
 
-                     // Get our pixel's index in the 1D screen array
-                     //index = y * width + x
-                     let idx = y * DISPLAY_MAX_X + x;
-                     // If a pixel on the screen is set to 01, 
-                     //and the sprite to be drawn contains a 01 for this same pixel, 
-                     //the screen pixel is turned off and VF is set to 01. 
-                     //If the sprite is simply drawn on the screen without drawing over any pixels set to 01,
-                     //VF is set to 00
-                     //boolean |= will only stay false if all of the display spots are false
-                     flipped |= self.display[idx]; 
-                     //xor with true, since we only do this when the sprite wants a pixel drawn
-                     self.display[idx] ^= true;
+                    // Get our pixel's index in the 1D screen array
+                    //index = y * width + x
+                    let idx = y * DISPLAY_MAX_X + x;
+                    // If a pixel on the screen is set to 01,
+                    //and the sprite to be drawn contains a 01 for this same pixel,
+                    //the screen pixel is turned off and VF is set to 01.
+                    //If the sprite is simply drawn on the screen without drawing over any pixels set to 01,
+                    //VF is set to 00
+                    //boolean |= will only stay false if all of the display spots are false
+                    flipped |= self.display[idx];
+                    //xor with true, since we only do this when the sprite wants a pixel drawn
+                    self.display[idx] ^= true;
                 }
             }
         }
@@ -502,15 +508,18 @@ impl Chip8 {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::{Arc, Mutex}, thread, time::Duration};
+    use std::{
+        sync::{Arc, Mutex},
+        thread,
+        time::Duration,
+    };
 
     use super::*;
-
 
     #[test]
     fn test_tick() {
         let mut chip = Chip8::new();
-        
+
         //test load jump command and execute.
         //jump to 400
         chip.memory[0x300] = 0x14;
@@ -577,7 +586,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Stack underflow")]  
+    #[should_panic(expected = "Stack underflow")]
     fn test_ret_underflow() {
         let mut chip8 = Chip8::new();
         chip8.ret();
@@ -719,7 +728,7 @@ mod tests {
         chip8.registers[1] = 5;
         chip8.sub_y_from_x(0, 1);
         assert_eq!(chip8.registers[0], 5);
-        assert_eq!(chip8.registers[0xF], 0);
+        assert_eq!(chip8.registers[0xF], 1);
     }
 
     #[test]
@@ -729,14 +738,14 @@ mod tests {
         chip8.registers[1] = 10;
         chip8.sub_y_from_x(0, 1);
         assert_eq!(chip8.registers[0], 251); // 5 - 10 = -5, which wraps around to 251 in unsigned 8-bit arithmetic
-        assert_eq!(chip8.registers[0xF], 1);
+        assert_eq!(chip8.registers[0xF], 0);
     }
 
     #[test]
     fn test_shift_right_lsb_1() {
         let mut chip8 = Chip8::new();
-        chip8.registers[0] = 0b00001001;
-        chip8.shift_right(0);
+        chip8.registers[1] = 0b00001001;
+        chip8.shift_right(0, 1);
         assert_eq!(1, chip8.registers[0xF]);
         assert_eq!(0b00000100, chip8.registers[0]);
     }
@@ -744,8 +753,8 @@ mod tests {
     #[test]
     fn test_shift_right_lsb_0() {
         let mut chip8 = Chip8::new();
-        chip8.registers[0] = 0b00000110;
-        chip8.shift_right(0);
+        chip8.registers[1] = 0b00000110;
+        chip8.shift_right(0, 1);
         assert_eq!(0, chip8.registers[0xF]);
         assert_eq!(0b00000011, chip8.registers[0]);
     }
@@ -757,7 +766,7 @@ mod tests {
         chip8.registers[1] = 10;
         chip8.sub_x_from_y(0, 1);
         assert_eq!(chip8.registers[0], 5);
-        assert_eq!(chip8.registers[0xF], 0);
+        assert_eq!(chip8.registers[0xF], 1);
     }
 
     #[test]
@@ -765,16 +774,16 @@ mod tests {
         let mut chip8 = Chip8::new();
         chip8.registers[0] = 10;
         chip8.registers[1] = 5;
-        chip8.sub_x_from_y(0, 1); 
+        chip8.sub_x_from_y(0, 1);
         assert_eq!(chip8.registers[0], 251); // 5 - 10 = -5, which wraps around to 251 in unsigned 8-bit arithmetic
-        assert_eq!(chip8.registers[0xF], 1);
+        assert_eq!(chip8.registers[0xF], 0);
     }
 
     #[test]
     fn test_shift_left_msb_1() {
         let mut chip8 = Chip8::new();
-        chip8.registers[0] = 0b10010000;
-        chip8.shift_left(0);
+        chip8.registers[1] = 0b10010000;
+        chip8.shift_left(0, 1);
         assert_eq!(1, chip8.registers[0xF]);
         assert_eq!(0b00100000, chip8.registers[0]);
     }
@@ -782,8 +791,8 @@ mod tests {
     #[test]
     fn test_shift_left_msb_0() {
         let mut chip8 = Chip8::new();
-        chip8.registers[0] = 0b01100000;
-        chip8.shift_left(0);
+        chip8.registers[1] = 0b01100000;
+        chip8.shift_left(0, 1);
         assert_eq!(0, chip8.registers[0xF]);
         assert_eq!(0b11000000, chip8.registers[0]);
     }
@@ -823,7 +832,6 @@ mod tests {
         chip8.set_delay_timer(0);
         assert_eq!(1, chip8.delay_timer_register);
     }
-
 
     #[test]
     fn test_set_sound_timer() {
@@ -872,7 +880,6 @@ mod tests {
         assert_eq!(0, chip3.memory[0x300]);
         assert_eq!(0, chip3.memory[0x301]);
         assert_eq!(2, chip3.memory[0x302]);
-        
     }
 
     #[test]
@@ -911,7 +918,7 @@ mod tests {
         assert_eq!(2, chip.memory[0x301]);
         assert_eq!(0, chip.memory[0x302]);
         assert_eq!(4, chip.memory[0x303]);
-        assert_eq!(0, chip.memory[0x304]); 
+        assert_eq!(0, chip.memory[0x304]);
 
         //make sure i is squared away
         assert_eq!(0x304, chip.i_register);
@@ -984,7 +991,7 @@ mod tests {
 
         //thread safe for multiple references and interior mutability
         let chip_arc = Arc::new(Mutex::new(chip));
-        
+
         //clone here so chip_arc doesn't move into closure
         let chip_clone = Arc::clone(&chip_arc);
         //thread to wait for key press
@@ -994,7 +1001,7 @@ mod tests {
             //while we haven't gotten past first opcode, tick
             while chip.position_in_memory < 0x302 {
                 //fetch and execute opcode
-                //if no key is pressed the program counter will move back 2, 
+                //if no key is pressed the program counter will move back 2,
                 //to retry until there is a key pressed
                 chip.tick();
             }
@@ -1083,11 +1090,10 @@ mod tests {
             chip.registers[0] = hex;
 
             chip.set_font_address_for_value_in_vx(0);
-    
+
             assert_eq!(FONTSET_ADDR as u16 + 5 * count, chip.i_register);
             count += 1;
         }
-
     }
 
     #[test]
@@ -1095,7 +1101,7 @@ mod tests {
         let mut chip = Chip8::new();
 
         //font start
-        chip.i_register = 5 * 0xF +  FONTSET_ADDR as u16;
+        chip.i_register = 5 * 0xF + FONTSET_ADDR as u16;
 
         //draw first letter in font set 5 bytes at
         chip.draw(0, 0, 5);
@@ -1111,6 +1117,5 @@ mod tests {
             }
             print!("\n");
         }
-
     }
 }
