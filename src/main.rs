@@ -11,14 +11,14 @@ use std::io::Read;
 const SCALE: u32 = 15;
 const WINDOW_HEIGHT: u32 = DISPLAY_MAX_Y as u32 * SCALE;
 const WINDOW_WIDTH: u32 = DISPLAY_MAX_X as u32 * SCALE;
-const TICKS_PER_FRAME: u8 = 20;
+const TICKS_PER_FRAME: u8 = 10;
 
 fn main() {
-    let file_path = "./roms/5-quirks.ch8";
-    let file_buffer = get_file_buffer(file_path);
+    let file_path = "./roms/PONG2";
+    let file_buffer = Box::new(get_file_buffer(file_path));
 
     let mut chip = Chip8::new();
-    chip.load_rom(&file_buffer);
+    chip.load_rom(file_buffer.into_boxed_slice());
 
     //setup sdl2
     let sdl_context = sdl2::init().unwrap();
@@ -52,6 +52,8 @@ fn main() {
                 } => {
                     if let Some(k) = key2btn(key) {
                         chip.key_press(k);
+                    } else {
+                        chip.restart();
                     }
                 }
                 Event::KeyUp {

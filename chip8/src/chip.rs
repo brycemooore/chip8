@@ -74,18 +74,43 @@ impl Chip8 {
         chip
     }
 
-    pub fn new_with_rom(rom: &[u8]) -> Self {
+    pub fn new_with_rom(rom: Box<[u8]>) -> Self {
         let mut chip = Chip8::new();
         chip.load_rom(rom);
         chip
+    }
+
+    pub fn reset(&mut self) {
+        self.position_in_memory = START_ADDR;
+        self.registers = [0; NUM_REGISTERS];
+        self.memory = [0; RAM];
+        self.stack = [0; STACK_SIZE];
+        self.stack_pointer = 0;
+        self.i_register = 0;
+        self.delay_timer_register = 0;
+        self.sound_timer_register = 0;
+        self.keys = [false; NUM_KEYS];
+        self.display = [false; DISPLAY_MAX_X * DISPLAY_MAX_Y];
+    }
+
+    pub fn restart(&mut self) {
+        self.position_in_memory = START_ADDR;
+        self.registers = [0; NUM_REGISTERS];
+        self.stack = [0; STACK_SIZE];
+        self.stack_pointer = 0;
+        self.i_register = 0;
+        self.delay_timer_register = 0;
+        self.sound_timer_register = 0;
+        self.keys = [false; NUM_KEYS];
+        self.display = [false; DISPLAY_MAX_X * DISPLAY_MAX_Y];
     }
 
     pub fn get_display(&self) -> &[bool; DISPLAY_MAX_X * DISPLAY_MAX_Y] {
         &self.display
     }
 
-    pub fn load_rom(&mut self, rom: &[u8]) {
-        self.memory[START_ADDR..=START_ADDR + rom.len() - 1].copy_from_slice(rom);
+    pub fn load_rom(&mut self, rom: Box<[u8]>) {
+        self.memory[START_ADDR..=START_ADDR + rom.len() - 1].copy_from_slice(&rom);
     }
 
     pub fn tick(&mut self) {
@@ -140,14 +165,12 @@ impl Chip8 {
             Opcode::Jump(nnn) => self.jump(nnn),
             Opcode::JumpPlusV0(nnn) => self.jump_plus_v0(nnn),
             Opcode::Call(nnn) => self.call(nnn),
-            Opcode::SkipIfEqualAtX { x, kk } => self.skip_if_equal_at_x(x, kk),
+            Opcode::SkipIfEqualAtX { x, kk } => self.skip_if_equal_at_x(x, kk), 
             Opcode::SkipIfNotEqualAtX { x, kk } => self.skip_if_not_equal_at_x(x, kk),
             Opcode::LoadValueToRegister { x, kk } => self.load_value_to_register(x, kk),
             Opcode::AddToValueInRegister { x, kk } => self.add_to_value_in_register(x, kk),
             Opcode::SkipIfBothValuesEqual { x, y } => self.skip_if_both_values_are_equal(x, y),
-            Opcode::SkipIfBothValuesNotEqual { x, y } => {
-                self.skip_if_both_values_are_not_equal(x, y)
-            }
+            Opcode::SkipIfBothValuesNotEqual { x, y } => self.skip_if_both_values_are_not_equal(x, y),
             Opcode::LoadYIntoX { x, y } => self.load_y_into_x(x, y),
             Opcode::BitwiseOrXY { x, y } => self.bitwise_or_xy(x, y),
             Opcode::BitwiseAndXY { x, y } => self.bitwise_and_xy(x, y),
@@ -298,7 +321,7 @@ impl Chip8 {
         let vx = self.registers[x as usize];
         let vy = self.registers[y as usize];
         self.registers[x as usize] = vx.wrapping_sub(vy);
-        self.set_vf(vx > vy);
+        self.set_vf(!vx > vy);
     }
 
     //8xy7 SUBN Vx, Vy
@@ -306,7 +329,7 @@ impl Chip8 {
         let vx = self.registers[x as usize];
         let vy = self.registers[y as usize];
         self.registers[x as usize] = vy.wrapping_sub(vx);
-        self.set_vf(vy > vx);
+        self.set_vf(!vy > vx);
     }
 
     //8xy6 SHR Vx {, Vy}
@@ -470,7 +493,7 @@ impl Chip8 {
                     //the screen pixel is turned off and VF is set to 01.
                     //If the sprite is simply drawn on the screen without drawing over any pixels set to 01,
                     //VF is set to 00
-                    //boolean |= will only stay false if all of the display spots are false
+                    //we want to flip if both are one
                     flipped |= self.display[idx];
                     //xor with true, since we only do this when the sprite wants a pixel drawn
                     self.display[idx] ^= true;
