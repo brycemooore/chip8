@@ -81,16 +81,8 @@ impl Chip8 {
     }
 
     pub fn reset(&mut self) {
-        self.position_in_memory = START_ADDR;
-        self.registers = [0; NUM_REGISTERS];
         self.memory = [0; RAM];
-        self.stack = [0; STACK_SIZE];
-        self.stack_pointer = 0;
-        self.i_register = 0;
-        self.delay_timer_register = 0;
-        self.sound_timer_register = 0;
-        self.keys = [false; NUM_KEYS];
-        self.display = [false; DISPLAY_MAX_X * DISPLAY_MAX_Y];
+        self.restart();
     }
 
     pub fn restart(&mut self) {
